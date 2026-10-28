@@ -1,0 +1,52 @@
+include:
+  - component: ${CI_SERVER_FQDN}/engineering/dev-tools/internal/gitlab-cicd-workflow/workflow@1
+  - component: ${CI_SERVER_FQDN}/engineering/dev-tools/internal/gitlab-cicd-workflow/run-if-protected@1
+  - local: .gitlab/npm-auth.gitlab-ci.yml
+  - component: ${CI_SERVER_FQDN}/engineering/dev-tools/gitlab-cicd-components/gitlab-cicd-docker/generate-semver-tags@2
+
+variables:
+  TERRAFORM_VERSION: 1.8.5
+  VAULT_VERSION: 1.16.1
+  AWS_CLI_VERSION: 2.15.7
+
+stages:
+  - test
+  - release
+
+.build_image_template:
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker
+  services:
+    - name: docker:dind
+      alias: docker
+  script:
+    - echo "$CI_DEPENDENCY_PROXY_PASSWORD" | docker login $CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX -u $CI_DEPENDENCY_PROXY_USER --password-stdin
+    - docker build -f $DOCKERFILE_PATH --build-arg REGISTRY=${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ --build-arg TERRAFORM_VERSION=$TERRAFORM_VERSION --build-arg VAULT_VERSION=$VAULT_VERSION --build-arg AWS_CLI_VERSION=$AWS_CLI_VERSION -t $IMAGE_TAG $BUILD_CONTEXT
+
+
+build:debian:
+  stage: test
+  variables:
+    DOCKERFILE_PATH: ./debian/bookworm/slim/Dockerfile
+    BUILD_CONTEXT: ./debian/bookworm/slim
+    IMAGE_TAG: tf-vault-aws:debian-bookworm-slim-test
+  extends:
+    - .build_image_template
+
+build:alpine:
+  stage: test
+  variables:
+    DOCKERFILE_PATH: ./alpine/3/Dockerfile
+    BUILD_CONTEXT: ./alpine/3
+    IMAGE_TAG: tf-vault-aws:alpine-3-test
+  extends:
+    - .build_image_template
+
+release:
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/node:20
+  stage: release
+  extends:
+    - .run-if-protected
+  script:
+    - !reference [".npm_auth:engineering_dev_tools_internal", script]
+    - npm install
+    - npx semantic-release

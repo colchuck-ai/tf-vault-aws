@@ -1,0 +1,7 @@
+.npm_auth:engineering_dev_tools_internal:
+  script:
+    - |
+      cat << EOF >> $HOME/.npmrc
+      //${CI_SERVER_HOST}/api/v4/groups/1234/-/packages/npm/:_authToken=${ENGINEERING_DEV_TOOLS_INTERNAL_DEPLOY_PASSWORD}
+      @engineering:registry=https://${CI_SERVER_HOST}/api/v4/groups/1234/-/packages/npm/
+      EOF
